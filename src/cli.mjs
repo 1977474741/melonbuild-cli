@@ -31,13 +31,14 @@ const help=`MelonBuild CLI ${version}
   --image-source remote|local 未指定目录时默认保留远端链接
   --reuse exact|none|params|slots|components
   --reuse-meta --with-ids --no-styles
-  --force-refresh            重新生成；成功后按账号扣次
+  --force-refresh            重新生成；试用期间成功后扣一次
   --overwrite                允许覆盖指定输出文件
   --json                     账号信息/错误使用 JSON
   --no-browser               登录时手动打开授权链接
   --version, --help
 
-免费版：与网站共用累计 10 次；完整 AST 紧凑 JSON 上限 30 KB，含图片链接。
+免费试用：与网站共用累计 10 次，每次完整 AST 最多 100 KB。
+10 次用完后，仍可免费获取不超过 30 KB 的完整 AST（紧凑 JSON，含图片链接）。
 图片二进制由本机下载，不计入 AST 大小。
 有效服务端结果缓存命中不扣次数；补下载图片不调用 AST 接口。
 订阅：${DEFAULT_ORIGIN}/subscribe
@@ -127,7 +128,7 @@ async function main() {
   if(['whoami','status'].includes(command)) {
     const data=await api('/api/cli/v1/account');
     if(machine)console.log(JSON.stringify(data));
-    else console.log('账号：'+(data.actor.displayName||data.actor.userId)+'\n权限：'+data.actor.tier+'\n'+(data.freeQuota?'累计免费次数：'+data.freeQuota.remaining+' / '+data.freeQuota.limit+'\n完整 AST 上限：30 KB（紧凑 JSON，含图片链接）':'会员账号')+'\n订阅：'+data.subscriptionUrl);
+    else console.log('账号：'+(data.actor.displayName||data.actor.userId)+'\n权限：'+data.actor.tier+'\n'+(data.freeQuota?'累计免费次数：'+data.freeQuota.remaining+' / '+data.freeQuota.limit+'\n'+(data.freeQuota.remaining>0?'试用期间完整 AST 上限：100 KB':'试用已用完，仍可免费获取不超过 30 KB 的完整 AST'):'会员账号')+'\n订阅：'+data.subscriptionUrl);
     return;
   }
   const url=target(positionals);
@@ -150,7 +151,10 @@ async function main() {
     if(typeof result.summary!=='string')throw new CliError('INVALID_RESPONSE','服务未返回摘要。');
     await emit(JSON.stringify(JSON.parse(result.summary)),output,flags.overwrite);
   }
-  if(result.freeQuota)console.error('累计免费次数剩余：'+result.freeQuota.remaining+' / '+result.freeQuota.limit);
+  if(result.freeQuota) {
+    console.error('累计免费次数剩余：'+result.freeQuota.remaining+' / '+result.freeQuota.limit);
+    if(result.freeQuota.remaining===0)console.error('免费试用已用完，后续仍可免费获取不超过 30 KB 的完整 AST。');
+  }
   if(result.cache?.hit)console.error('服务端结果缓存命中，本次不扣次数。');
 }
 async function emit(content,output,overwrite) {

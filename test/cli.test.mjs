@@ -36,3 +36,14 @@ test('built CLI browser login stores platform token and logout revokes it; quota
   await run(directory,['logout']);await assert.rejects(access(join(directory,'credential.json')));
  }finally{await rm(directory,{recursive:true,force:true});}
 });
+
+test('CLI distinguishes the 100 KB trial from 30 KB access after trial and still accepts a successful AST at zero',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'melonbuild-cli-trial-'));
+ try {
+  await writeFile(join(directory,'credential.json'),JSON.stringify({origin:'https://www.melonbuild.com',token,expiresAt:new Date(Date.now()+86400000).toISOString()}));
+  const trial=await run(directory,['whoami']);assert.match(trial.stdout,/100 KB/);assert.doesNotMatch(trial.stdout,/试用已用完/);
+  const after=await run(directory,['whoami'],{CLI_TEST_AFTER_TRIAL:'1'});assert.match(after.stdout,/试用已用完.*30 KB/);assert.doesNotMatch(after.stdout,/100 KB/);
+  const ast=await run(directory,['node-ast','Abc123','1:2'],{CLI_TEST_AFTER_TRIAL:'1'});assert.ok(JSON.parse(ast.stdout).nodes);assert.match(ast.stderr,/后续仍可免费获取不超过 30 KB/);
+  const help=await run(directory,['--help']);assert.match(help.stdout,/每次完整 AST 最多 100 KB/);assert.match(help.stdout,/10 次用完后.*30 KB/);
+ }finally{await rm(directory,{recursive:true,force:true});}
+});
