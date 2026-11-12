@@ -6,8 +6,7 @@ import {join} from 'node:path';
 import {saveCredential,loadCredential} from '../src/storage.mjs';
 import {createApi} from '../src/api.mjs';
 const value={origin:'https://www.melonbuild.com',token:'mb_cli_'+'a'.repeat(43),expiresAt:'2099-01-01T00:00:00.000Z'};
-test('credential reads reject a publicly readable file or writable directory before using its token',async()=>{
- if(process.platform==='win32')return;
+test('credential reads reject a publicly readable file or writable directory before using its token',{skip:process.platform==='win32'?'Unix permission bits do not apply on Windows':false},async()=>{
  const directory=await mkdtemp(join(tmpdir(),'melonbuild-security-permissions-'));
  try {
   await saveCredential(directory,value);assert.deepEqual(await loadCredential(directory),value);
@@ -18,14 +17,21 @@ test('credential reads reject a publicly readable file or writable directory bef
   await chmod(directory,0o700);assert.deepEqual(await loadCredential(directory),value);
  }finally{await rm(directory,{recursive:true,force:true});}
 });
-test('credential reads and saves refuse symbolic links for both the credential file and config directory',async()=>{
- const root=await mkdtemp(join(tmpdir(),'melonbuild-security-links-')),directory=join(root,'actual');
+test('credential reads and writes reject a symbolic file link when supported',async t=>{
+ const root=await mkdtemp(join(tmpdir(),'melonbuild-security-file-link-'));
+ try {
+  await saveCredential(root,value);await rename(join(root,'credential.json'),join(root,'real.json'));
+  try{await symlink(join(root,'real.json'),join(root,'credential.json'),'file');}
+  catch(error){if(process.platform==='win32'&&error.code==='EPERM'){t.skip('Windows file symlinks require Developer Mode or elevated rights');return;}throw error;}
+  await assert.rejects(loadCredential(root),e=>e.code==='INSECURE_CREDENTIAL_STORAGE');
+  await assert.rejects(saveCredential(root,value));
+ }finally{await rm(root,{recursive:true,force:true});}
+});
+test('credential reads and saves reject config directory links or Windows junctions',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'melonbuild-security-directory-link-')),directory=join(root,'actual');
  try {
   await saveCredential(directory,value);
-  await rename(join(directory,'credential.json'),join(directory,'real.json'));
-  await symlink(join(directory,'real.json'),join(directory,'credential.json'));
-  await assert.rejects(loadCredential(directory),e=>e.code==='INSECURE_CREDENTIAL_STORAGE');
-  await symlink(directory,join(root,'linked-config'),'dir');
+  await symlink(directory,join(root,'linked-config'),process.platform==='win32'?'junction':'dir');
   await assert.rejects(loadCredential(join(root,'linked-config')),e=>e.code==='INSECURE_CREDENTIAL_STORAGE');
   await assert.rejects(saveCredential(join(root,'linked-config'),value),e=>e.code==='INSECURE_CREDENTIAL_STORAGE');
  }finally{await rm(root,{recursive:true,force:true});}

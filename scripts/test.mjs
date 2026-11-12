@@ -1,0 +1,10 @@
+import {readdir} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+import {join} from 'node:path';
+import {spawn} from 'node:child_process';
+const root=fileURLToPath(new URL('../',import.meta.url)),directory=join(root,'test');
+const files=(await readdir(directory)).filter(name=>name.endsWith('.test.mjs')).sort().map(name=>join(directory,name));
+if(!files.length)throw new Error('No test files found');
+const child=spawn(process.execPath,['--test',...files],{cwd:root,stdio:'inherit'});
+child.once('error',error=>{console.error(error.message);process.exitCode=1;});
+child.once('close',(code,signal)=>{process.exitCode=code??(signal==='SIGINT'?130:1);});

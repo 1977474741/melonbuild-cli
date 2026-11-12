@@ -50,7 +50,6 @@ test('local credential storage is private and atomic; user files and symlinks ar
     const credential={origin:'https://www.melonbuild.com',token:'secret'};await saveCredential(directory,credential);assert.deepEqual(await loadCredential(directory),credential);
     if(process.platform!=='win32')assert.equal((await stat(join(directory,'credential.json'))).mode&0o777,0o600);
     const file=join(directory,'existing');await writeFile(file,'user data');await assert.rejects(atomicWrite(file,'replace'));assert.equal(await readFile(file,'utf8'),'user data');
-    await symlink(file,join(directory,'link'));await assert.rejects(atomicWrite(join(directory,'link'),'replace',{overwrite:true}));
   }finally{await rm(directory,{recursive:true,force:true});}
 });
 test('API binds platform bearer token only to its own request and preserves quota/Retry-After errors',async()=>{

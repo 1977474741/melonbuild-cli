@@ -1,0 +1,32 @@
+name: CLI compatibility
+on:
+  push:
+    branches: [main, dev-1.0]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ['22.15.0', '24']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - uses: pnpm/action-setup@f53f5227a9e83886ab598c617f3c170fab62f0d3 # v6
+        with:
+          version: 10.32.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - run: pnpm test

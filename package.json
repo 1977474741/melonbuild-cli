@@ -17,8 +17,8 @@
   "packageManager": "pnpm@10.32.1",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test test/*.test.mjs",
-    "prepack": "pnpm run build"
+    "test": "node scripts/test.mjs",
+    "prepack": "node scripts/build.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.12"

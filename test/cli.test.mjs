@@ -6,11 +6,11 @@ import {mkdtemp,rm,readFile,writeFile,access} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-const exec=promisify(execFile),cli=fileURLToPath(new URL('../dist/cli.mjs',import.meta.url)),fixture=fileURLToPath(new URL('./fixture-preload.mjs',import.meta.url));
+const exec=promisify(execFile),cli=fileURLToPath(new URL('../dist/cli.mjs',import.meta.url)),fixture=new URL('./fixture-preload.mjs',import.meta.url).href;
 const token='mb_cli_'+'a'.repeat(43);
 async function run(directory,args,env={}){return exec(process.execPath,['--import',fixture,cli,...args],{env:{...process.env,MELONBUILD_CONFIG_DIR:directory,CLI_TEST_LOG:join(directory,'calls.log'),...env}});}
 test('built CLI keeps stdout compact JSON, supports local-only retries and fails preflight before chargeable API',async()=>{
- const directory=await mkdtemp(join(tmpdir(),'melonbuild-cli-command-'));
+ const directory=await mkdtemp(join(tmpdir(),'melonbuild CLI 中文路径-'));
  try {
   await writeFile(join(directory,'credential.json'),JSON.stringify({origin:'https://www.melonbuild.com',token,expiresAt:new Date(Date.now()+86400000).toISOString()}),{mode:0o600});
   const who=await run(directory,['whoami','--json']);assert.equal(JSON.parse(who.stdout).actor.displayName,'Fixture User');

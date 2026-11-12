@@ -1,4 +1,4 @@
-import {mkdir,writeFile,readFile,rename,rm,lstat,chmod,open} from 'node:fs/promises';
+import {mkdir,writeFile,readFile,rename,rm,lstat,chmod,open,link,copyFile} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {CliError} from './api.mjs';
 import {join,dirname,resolve} from 'node:path';
@@ -9,7 +9,7 @@ export function configDirectory(env=process.env) {
   if(process.platform==='win32')return join(env.LOCALAPPDATA||join(homedir(),'AppData','Local'),'melonbuild');
   return join(env.XDG_CONFIG_HOME||join(homedir(),'.config'),'melonbuild');
 }
-export async function atomicWrite(file,data,{overwrite=false,privateFile=false}={}) {
+export async function atomicWrite(file,data,{overwrite=false,privateFile=false,linkFile=link}={}) {
   await mkdir(dirname(file),{recursive:true,...(privateFile?{mode:0o700}:{})});
   const existing=await lstat(file).catch(e=>{if(e.code!=='ENOENT')throw e;});
   if(existing?.isSymbolicLink()||existing&&!existing.isFile())throw new Error('拒绝写入非普通文件：'+file);
@@ -20,8 +20,13 @@ export async function atomicWrite(file,data,{overwrite=false,privateFile=false}=
     if(overwrite)await rename(temporary,file);
     else {
       // Exclusive creation also protects a file created after the preflight check.
-      const {link}=await import('node:fs/promises');
-      await link(temporary,file);
+      try {await linkFile(temporary,file);}
+      catch(error) {
+        // FAT/exFAT and some network shares cannot create hard links. Exclusive copy
+        // preserves the no-overwrite rule, although visibility is not atomic there.
+        if(!['ENOTSUP','EOPNOTSUPP','EXDEV','ENOSYS','EPERM'].includes(error.code))throw error;
+        await copyFile(temporary,file,constants.COPYFILE_EXCL);
+      }
     }
   }finally{await rm(temporary,{force:true}).catch(()=>{});}
 }

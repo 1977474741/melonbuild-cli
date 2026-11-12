@@ -23,6 +23,20 @@ node dist/cli.mjs --help
 
 以下示例均在仓库目录内运行。登录和设计稿转换需要连接 MelonBuild 在线服务；服务未开放或不可用时，仍可对已有 AST 执行本地图片下载。
 
+## Windows / PowerShell
+
+PowerShell 中可使用以下单行命令，路径包含空格时用双引号包裹：
+
+```powershell
+node .\dist\cli.mjs login
+node .\dist\cli.mjs node-ast "https://www.figma.com/design/FILEKEY?node-id=12-34" --output ".\design\ast.json" --image-dir ".\public\images"
+node .\dist\cli.mjs whoami
+```
+
+下文多行示例中的 `\` 是 Bash 续行符，PowerShell 中请改为单行执行。若 PowerShell 的脚本策略阻止 Corepack，可用 `corepack.cmd pnpm ...` 执行相同操作。
+
+Windows 凭据使用用户配置目录的系统权限；Unix 的 `0700` / `0600` 权限检查不适用于 Windows。
+
 ## 登录
 
 ```sh
@@ -184,7 +198,7 @@ corepack pnpm run build
 corepack pnpm test
 ```
 
-测试使用模拟接口和临时文件，无需 Figma 账号。
+测试使用模拟接口和临时文件，无需 Figma 账号。CI 覆盖 Windows / macOS / Linux 和 Node.js 22.15 / 24；包含带中文、空格的路径和本地图片下载。Windows 上的 Unix 权限测试会跳过；文件符号链接测试需要系统允许创建符号链接，目录 junction 检查会单独执行。
 
 ## 许可证
 
