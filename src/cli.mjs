@@ -17,7 +17,7 @@ const help=`MelonBuild CLI ${version}
 用法：
   melonbuild login [--no-browser]
   melonbuild whoami [--json]
-  melonbuild logout
+  melonbuild logout [--all]
   melonbuild node-ast <Figma链接> --output ast.json --image-dir ./public/images
   melonbuild node-ast <fileKey> <nodeId> [选项]
   melonbuild node-summary <Figma链接> --output summary.json
@@ -69,12 +69,13 @@ async function main() {
   const {values:flags,positionals}=parseArgs({allowPositionals:true,options:{
     help:{type:'boolean',short:'h'},version:{type:'boolean',short:'v'},json:{type:'boolean'},output:{type:'string',short:'o'},format:{type:'string'},
     'image-dir':{type:'string'},'image-local-path':{type:'string'},'image-source':{type:'string'},reuse:{type:'string'},'reuse-meta':{type:'boolean'},
-    'with-ids':{type:'boolean'},'no-styles':{type:'boolean'},'force-refresh':{type:'boolean'},overwrite:{type:'boolean'},'no-browser':{type:'boolean'},
+    'with-ids':{type:'boolean'},'no-styles':{type:'boolean'},'force-refresh':{type:'boolean'},overwrite:{type:'boolean'},'no-browser':{type:'boolean'},all:{type:'boolean'},
   }});
   machine=!!flags.json;
   if(flags.version){console.log(version);return;}
   const command=positionals.shift();if(flags.help||!command){console.log(help);return;}
   if(!['login','logout','whoami','status','node-ast','node-summary','download-images'].includes(command))throw new CliError('UNKNOWN_COMMAND','未知命令：'+command+'。使用 --help 查看帮助。');
+  if(flags.all&&command!=='logout')throw new CliError('INVALID_OPTIONS','--all 仅用于 logout。');
   const output=flags.output?resolve(flags.output):undefined,format=flags.format??'json';
   const imageDir=flags['image-dir']??flags['image-local-path'];
   if(flags['image-dir']&&flags['image-local-path']&&resolve(flags['image-dir'])!==resolve(flags['image-local-path']))throw new CliError('INVALID_OPTIONS','图片目录参数不一致。');
@@ -118,12 +119,12 @@ async function main() {
     throw new CliError('CLI_LOGIN_EXPIRED','登录等待已超时，请重新运行 melonbuild login。');
   }
   if(saved&&saved.origin!==origin)throw new CliError('API_ORIGIN_MISMATCH','当前登录属于其他服务地址，请先使用新地址运行 melonbuild login。');
-  if(command==='logout'&&!saved){console.error('当前未登录。');return;}
+  if(command==='logout'&&!saved){if(flags.all)throw new CliError('CLI_LOGIN_REQUIRED','撤销全部 CLI 凭据需要先运行 melonbuild login。');console.error('当前未登录。');return;}
   if(command!=='logout'&&(!saved||!/^mb_cli_[A-Za-z0-9_-]{43}$/.test(saved.token)||!Number.isFinite(Date.parse(saved.expiresAt))||Date.parse(saved.expiresAt)<=Date.now()))throw new CliError('CLI_LOGIN_REQUIRED','请先运行 melonbuild login。');
   const api=createApi(origin,{token:saved.token,signal:controller.signal});
   if(command==='logout') {
-    try{await api('/api/cli/v1/logout',{});}catch(e){if(e.code!=='CLI_LOGIN_REQUIRED')throw e;}
-    await clearCredential(directory);console.error('已退出，此设备的登录凭据已撤销。');return;
+    try{await api('/api/cli/v1/logout',flags.all?{all:true}:{});}catch(e){if(flags.all||e.code!=='CLI_LOGIN_REQUIRED')throw e;}
+    await clearCredential(directory);console.error(flags.all?'已退出，当前账号的全部 CLI 登录凭据已撤销。':'已退出，此设备的登录凭据已撤销。');return;
   }
   if(['whoami','status'].includes(command)) {
     const data=await api('/api/cli/v1/account');

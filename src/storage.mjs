@@ -1,4 +1,6 @@
-import {mkdir,writeFile,readFile,rename,rm,lstat,chmod} from 'node:fs/promises';
+import {mkdir,writeFile,readFile,rename,rm,lstat,chmod,open} from 'node:fs/promises';
+import {constants} from 'node:fs';
+import {CliError} from './api.mjs';
 import {join,dirname,resolve} from 'node:path';
 import {homedir} from 'node:os';
 import {randomUUID} from 'node:crypto';
@@ -23,12 +25,38 @@ export async function atomicWrite(file,data,{overwrite=false,privateFile=false}=
     }
   }finally{await rm(temporary,{force:true}).catch(()=>{});}
 }
+function insecureCredential() {
+  return new CliError('INSECURE_CREDENTIAL_STORAGE','登录配置必须由当前用户拥有，目录权限应为 0700、凭据文件权限应为 0600，且不能使用符号链接。请修复权限；如怀疑泄漏，重新登录后运行 melonbuild logout --all。');
+}
+function ownedByCurrentUser(details) {
+  return process.platform==='win32'||typeof process.getuid!=='function'||details.uid===process.getuid();
+}
+async function checkDirectory(directory,strict=true) {
+  const details=await lstat(directory);
+  if(details.isSymbolicLink()||!details.isDirectory()||!ownedByCurrentUser(details))throw insecureCredential();
+  if(strict&&process.platform!=='win32'&&(details.mode&0o077)!==0)throw insecureCredential();
+}
 export async function loadCredential(directory) {
-  try {return JSON.parse(await readFile(join(directory,'credential.json'),'utf8'));}
-  catch(e){if(e.code==='ENOENT')return null;throw new Error('登录配置无法读取，请运行 melonbuild login。');}
+  let handle;
+  try {
+    await checkDirectory(directory);
+    const file=join(directory,'credential.json'),entry=await lstat(file);
+    if(entry.isSymbolicLink())throw insecureCredential();
+    handle=await open(file,constants.O_RDONLY|(constants.O_NOFOLLOW??0));
+    const details=await handle.stat();
+    if(!details.isFile()||!ownedByCurrentUser(details)||details.size>16384||
+       process.platform!=='win32'&&(details.mode&0o077)!==0)throw insecureCredential();
+    return JSON.parse(await handle.readFile('utf8'));
+  }catch(e){
+    if(e.code==='ENOENT')return null;
+    if(e instanceof CliError)throw e;
+    if(e.code==='ELOOP')throw insecureCredential();
+    throw new Error('登录配置无法读取，请运行 melonbuild login。');
+  }finally{await handle?.close();}
 }
 export async function saveCredential(directory,credential) {
   await mkdir(directory,{recursive:true,mode:0o700});
+  await checkDirectory(directory,false);
   if(process.platform!=='win32')await chmod(directory,0o700);
   await atomicWrite(join(directory,'credential.json'),JSON.stringify(credential)+'\n',{overwrite:true,privateFile:true});
 }

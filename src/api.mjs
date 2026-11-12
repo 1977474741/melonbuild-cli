@@ -14,9 +14,12 @@ export async function readBounded(response,maxBytes=40*1024*1024) {
   return Buffer.concat(chunks);
 }
 export function createApi(origin,{token,fetchImpl=fetch,signal}={}) {
+  origin=apiOrigin(origin);
   return async function api(path,body,{timeoutMs=210000}={}) {
+    const url=new URL(path,origin);
+    if(url.origin!==origin||url.username||url.password)throw new CliError('API_ORIGIN_MISMATCH','拒绝向其他地址发送平台登录凭据。');
     let response;
-    try {response=await fetchImpl(new URL(path,origin),{method:body===undefined?'GET':'POST',redirect:'error',
+    try {response=await fetchImpl(url,{method:body===undefined?'GET':'POST',redirect:'error',
       headers:{accept:'application/json',...(body===undefined?{}:{'content-type':'application/json'}),...(token?{authorization:'Bearer '+token}:{})},
       body:body===undefined?undefined:JSON.stringify(body),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(timeoutMs)]):AbortSignal.timeout(timeoutMs)});}
     catch(e){if(signal?.aborted)throw new CliError('CANCELED','操作已取消。');throw new CliError('NETWORK_ERROR','无法连接 MelonBuild，请检查网络后重试。');}

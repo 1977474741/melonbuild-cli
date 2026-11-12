@@ -12,7 +12,7 @@ async function run(directory,args,env={}){return exec(process.execPath,['--impor
 test('built CLI keeps stdout compact JSON, supports local-only retries and fails preflight before chargeable API',async()=>{
  const directory=await mkdtemp(join(tmpdir(),'melonbuild-cli-command-'));
  try {
-  await writeFile(join(directory,'credential.json'),JSON.stringify({origin:'https://www.melonbuild.com',token,expiresAt:new Date(Date.now()+86400000).toISOString()}));
+  await writeFile(join(directory,'credential.json'),JSON.stringify({origin:'https://www.melonbuild.com',token,expiresAt:new Date(Date.now()+86400000).toISOString()}),{mode:0o600});
   const who=await run(directory,['whoami','--json']);assert.equal(JSON.parse(who.stdout).actor.displayName,'Fixture User');
   const result=await run(directory,['node-ast','https://www.figma.com/design/Abc123?node-id=1-2']);assert.ok(JSON.parse(result.stdout).nodes);assert.ok(!result.stdout.includes('\n'));assert.match(result.stderr,/剩余/);
   const output=join(directory,'ast.json'),images=join(directory,'images');
@@ -40,10 +40,19 @@ test('built CLI browser login stores platform token and logout revokes it; quota
 test('CLI distinguishes the 100 KB trial from 30 KB access after trial and still accepts a successful AST at zero',async()=>{
  const directory=await mkdtemp(join(tmpdir(),'melonbuild-cli-trial-'));
  try {
-  await writeFile(join(directory,'credential.json'),JSON.stringify({origin:'https://www.melonbuild.com',token,expiresAt:new Date(Date.now()+86400000).toISOString()}));
+  await writeFile(join(directory,'credential.json'),JSON.stringify({origin:'https://www.melonbuild.com',token,expiresAt:new Date(Date.now()+86400000).toISOString()}),{mode:0o600});
   const trial=await run(directory,['whoami']);assert.match(trial.stdout,/100 KB/);assert.doesNotMatch(trial.stdout,/试用已用完/);
   const after=await run(directory,['whoami'],{CLI_TEST_AFTER_TRIAL:'1'});assert.match(after.stdout,/试用已用完.*30 KB/);assert.doesNotMatch(after.stdout,/100 KB/);
   const ast=await run(directory,['node-ast','Abc123','1:2'],{CLI_TEST_AFTER_TRIAL:'1'});assert.ok(JSON.parse(ast.stdout).nodes);assert.match(ast.stderr,/后续仍可免费获取不超过 30 KB/);
   const help=await run(directory,['--help']);assert.match(help.stdout,/每次完整 AST 最多 100 KB/);assert.match(help.stdout,/10 次用完后.*30 KB/);
+ }finally{await rm(directory,{recursive:true,force:true});}
+});
+
+test('logout --all requests account-scoped revocation and does not claim success for an expired login',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'melonbuild-cli-revoke-all-'));
+ try {
+  await writeFile(join(directory,'credential.json'),JSON.stringify({origin:'https://www.melonbuild.com',token,expiresAt:new Date(Date.now()+86400000).toISOString()}),{mode:0o600});
+  const result=await run(directory,['logout','--all']);assert.match(result.stderr,/全部 CLI 登录凭据已撤销/);await assert.rejects(access(join(directory,'credential.json')));
+  await assert.rejects(run(directory,['logout','--all']),e=>e.code===2&&/需要先运行/.test(e.stderr));
  }finally{await rm(directory,{recursive:true,force:true});}
 });

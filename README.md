@@ -44,6 +44,14 @@ node dist/cli.mjs login --no-browser
 node dist/cli.mjs logout
 ```
 
+如需撤销该账号全部设备上的 CLI 登录凭据：
+
+```sh
+node dist/cli.mjs logout --all
+```
+
+怀疑旧凭据泄漏时，可先重新登录，再执行此命令。它会使该账号所有 CLI 凭据失效，不退出网站登录。
+
 ## 获取设计 AST
 
 在 Figma 中选中目标画板或节点，复制包含 `node-id` 的链接：
@@ -167,7 +175,7 @@ node dist/cli.mjs whoami --json
 | Linux / macOS | `$XDG_CONFIG_HOME/melonbuild`，默认 `~/.config/melonbuild` |
 | Windows | `%LOCALAPPDATA%/melonbuild` |
 
-可使用 `MELONBUILD_CONFIG_DIR` 自定义配置目录，或用 `MELONBUILD_API_URL` 指定 HTTPS 服务地址。不同服务地址的登录凭据相互独立。
+可使用 `MELONBUILD_CONFIG_DIR` 自定义配置目录，或用 `MELONBUILD_API_URL` 指定 HTTPS 服务地址。不同服务地址的登录凭据相互独立。Unix 系统会检查凭据归属和权限：配置目录为 `0700`，凭据文件为 `0600`，不接受符号链接。
 
 ## 开发
 
