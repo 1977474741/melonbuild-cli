@@ -56,3 +56,18 @@ test('logout --all requests account-scoped revocation and does not claim success
   await assert.rejects(run(directory,['logout','--all']),e=>e.code===2&&/需要先运行/.test(e.stderr));
  }finally{await rm(directory,{recursive:true,force:true});}
 });
+
+test('resource limit errors preserve the observed amount, specific maximum and a single subscription link',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'melonbuild-cli-limit-message-'));
+ try {
+  await writeFile(join(directory,'credential.json'),JSON.stringify({origin:'https://www.melonbuild.com',token,expiresAt:new Date(Date.now()+86400000).toISOString()}),{mode:0o600});
+  await assert.rejects(run(directory,['node-ast','Abc123','1:2'],{CLI_TEST_LIMIT:'nodes'}),e=>{
+   assert.equal(e.stdout,'');assert.match(e.stderr,/6,000/);assert.match(e.stderr,/至少 6,001/);assert.match(e.stderr,/本次不扣/);assert.match(e.stderr,/limit-request/);
+   assert.equal(e.stderr.match(/https:\/\/www\.melonbuild\.com\/subscribe/g)?.length,1);return true;
+  });
+  await assert.rejects(run(directory,['node-ast','Abc123','1:2','--json'],{CLI_TEST_LIMIT:'nodes'}),e=>{
+   const details=JSON.parse(e.stderr.trim().split('\n').at(-1)).error;assert.deepEqual(details.limit,{kind:'nodes',max:6000,actual:6001,atLeast:true});assert.equal(details.subscriptionUrl,'https://www.melonbuild.com/subscribe');return true;
+  });
+  await assert.rejects(run(directory,['node-ast','Abc123','1:2'],{CLI_TEST_LIMIT:'member'}),e=>{assert.match(e.stderr,/50,000/);assert.doesNotMatch(e.stderr,/subscribe|订阅：/);return true;});
+ }finally{await rm(directory,{recursive:true,force:true});}
+});

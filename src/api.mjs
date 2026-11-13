@@ -13,6 +13,10 @@ export async function readBounded(response,maxBytes=40*1024*1024) {
   for await(const chunk of response.body){bytes+=chunk.length;if(bytes>maxBytes)throw new CliError('RESPONSE_TOO_LARGE','响应超过本地读取上限。');chunks.push(chunk);}
   return Buffer.concat(chunks);
 }
+function limitDetails(value) {
+  if(!value||!['nodes','inputBytes','resultBytes','astBytes'].includes(value.kind)||!Number.isSafeInteger(value.max)||value.max<=0)return;
+  return {kind:value.kind,max:value.max,...(Number.isSafeInteger(value.actual)&&value.actual>=0?{actual:value.actual}:{}),...(value.atLeast===true?{atLeast:true}:{})};
+}
 export function createApi(origin,{token,fetchImpl=fetch,signal}={}) {
   origin=apiOrigin(origin);
   return async function api(path,body,{timeoutMs=210000}={}) {
@@ -27,8 +31,10 @@ export function createApi(origin,{token,fetchImpl=fetch,signal}={}) {
     try{data=JSON.parse((await readBounded(response)).toString('utf8'));}catch(e){if(e instanceof CliError)throw e;throw new CliError('INVALID_RESPONSE','服务返回了无法解析的响应。');}
     if(!response.ok) {
       const retryAfter=Number(response.headers.get('retry-after'))||0;
-      throw new CliError(data.error?.code||'REQUEST_FAILED',data.error?.message||'请求失败。',
-        {requestId:data.requestId,retryAfter,status:response.status,subscriptionUrl:origin+'/subscribe'});
+      const code=data.error?.code||'REQUEST_FAILED',limit=limitDetails(data.error?.limit);
+      const subscriptionUrl=data.error?.subscriptionUrl===origin+'/subscribe'||['FREE_QUOTA_EXHAUSTED','FREE_AST_TOO_LARGE'].includes(code)?origin+'/subscribe':undefined;
+      throw new CliError(code,data.error?.message||'请求失败。',
+        {requestId:data.requestId,retryAfter,status:response.status,...(limit?{limit}:{}),...(subscriptionUrl?{subscriptionUrl}:{})});
     }
     return data;
   };

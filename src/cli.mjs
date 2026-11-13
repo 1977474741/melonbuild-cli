@@ -180,11 +180,11 @@ main().catch(error=>{
   const canceled=controller.signal.aborted;
   const code=canceled?'CANCELED':error.code||'CLI_ERROR',message=canceled?'操作已取消。':error.message;
   const details={code,message,...(error.requestId?{requestId:error.requestId}:{}),...(error.retryAfter?{retryAfter:error.retryAfter}:{}),
-    ...(['FREE_QUOTA_EXHAUSTED','FREE_AST_TOO_LARGE'].includes(code)?{subscriptionUrl:error.subscriptionUrl||DEFAULT_ORIGIN+'/subscribe'}:{})};
+    ...(error.limit?{limit:error.limit}:{}),...(error.subscriptionUrl?{subscriptionUrl:error.subscriptionUrl}:['FREE_QUOTA_EXHAUSTED','FREE_AST_TOO_LARGE'].includes(code)?{subscriptionUrl:DEFAULT_ORIGIN+'/subscribe'}:{})};
   if(machine)console.error(JSON.stringify({error:details}));
   else {
     console.error('['+code+'] '+message);
-    if(details.subscriptionUrl)console.error('订阅：'+details.subscriptionUrl);
+    if(details.subscriptionUrl&&!message.includes(details.subscriptionUrl))console.error('订阅：'+details.subscriptionUrl);
     if(error.retryAfter)console.error('可重试时间：'+new Date(Date.now()+error.retryAfter*1000).toISOString());
     if(error.requestId)console.error('请求编号：'+error.requestId);
   }
