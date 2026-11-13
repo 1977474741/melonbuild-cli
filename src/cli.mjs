@@ -69,7 +69,7 @@ async function main() {
   const {values:flags,positionals}=parseArgs({allowPositionals:true,options:{
     help:{type:'boolean',short:'h'},version:{type:'boolean',short:'v'},json:{type:'boolean'},output:{type:'string',short:'o'},format:{type:'string'},
     'image-dir':{type:'string'},'image-local-path':{type:'string'},'image-source':{type:'string'},reuse:{type:'string'},'reuse-meta':{type:'boolean'},
-    'with-ids':{type:'boolean'},'no-styles':{type:'boolean'},'force-refresh':{type:'boolean'},overwrite:{type:'boolean'},'no-browser':{type:'boolean'},all:{type:'boolean'},
+    'with-ids':{type:'boolean'},'no-styles':{type:'boolean'},'force-refresh':{type:'boolean'},overwrite:{type:'boolean'},'no-browser':{type:'boolean'},all:{type:'boolean'},dev:{type:'boolean'},
   }});
   machine=!!flags.json;
   if(flags.version){console.log(version);return;}
@@ -86,7 +86,7 @@ async function main() {
   if(flags['image-source']==='local'&&!imageDir)throw new CliError('IMAGE_DIR_REQUIRED','本地图片需要指定 --image-dir。');
   if(flags['image-source']==='remote'&&imageDir)throw new CliError('INVALID_OPTIONS','已指定下载目录，请移除 --image-source remote。');
   if(['node-ast','node-summary','download-images'].includes(command)&&output)await preflight(output,flags.overwrite);
-  const directory=configDirectory();
+  const directory=flags.dev?join(configDirectory(),'dev'):configDirectory();
   if(command==='download-images') {
     if(positionals.length!==1||!imageDir)throw new CliError('INVALID_OPTIONS','用法：download-images <ast.remote.json> --image-dir <目录> [--output <文件>]。');
     const source=resolve(positionals[0]);
@@ -102,7 +102,7 @@ async function main() {
     const pending=await api('/api/cli/auth/start',{codeChallenge},{timeoutMs:30000});
     const verification=new URL(pending.verificationUri);
     if(verification.origin!==origin||verification.pathname!=='/api/cli/authorize'||!/^[A-F0-9]{10}$/.test(pending.userCode)||!/^[A-Za-z0-9_-]{43}$/.test(pending.deviceCode))throw new CliError('INVALID_RESPONSE','服务返回的登录信息无效。');
-    verification.hash=new URLSearchParams({code:pending.userCode}).toString();
+    verification.hash=new URLSearchParams({code:pending.userCode,...(flags.dev?{clientMode:'dev'}:{})}).toString();
     console.error('请打开：'+verification.href+'\n终端登录码：'+pending.userCode+'\n核对浏览器登录码后确认。');
     if(!flags['no-browser'])openBrowser(verification.href);
     const deadline=Date.now()+Math.min(600,Number(pending.expiresIn)||600)*1000;let interval=5;
@@ -133,7 +133,7 @@ async function main() {
     return;
   }
   const url=target(positionals);
-  const body={url,outputs:[command==='node-ast'?'ast':'summary'],format:'json',...(flags['force-refresh']?{forceRefresh:true}:{})};
+  const body={url,outputs:[command==='node-ast'?'ast':'summary'],format:'json',...(flags.dev?{clientMode:'dev'}:{}),...(flags['force-refresh']?{forceRefresh:true}:{})};
   if(command==='node-ast')Object.assign(body,{reuse:flags.reuse??'exact',includeStyles:!flags['no-styles'],reuseMeta:!!flags['reuse-meta'],withIds:!!flags['with-ids']});
   // Check local destinations before requesting a potentially chargeable generation.
   let source;

@@ -19,7 +19,7 @@ globalThis.fetch=async(input,options)=>{
   }
 
   if(process.env.CLI_TEST_QUOTA)return Response.json({error:{code:'FREE_QUOTA_EXHAUSTED',message:'免费次数已用完'}},{status:403});
-  const body=JSON.parse(options.body);if(body.format!=='json')throw new Error('Must request compact JSON');
+  const body=JSON.parse(options.body);if(process.env.CLI_TEST_DEV&&body.clientMode!=='dev')throw new Error('Missing dev mode');if(body.format!=='json')throw new Error('Must request compact JSON');
   return Response.json({ast:JSON.stringify(ast),astVersion:'1',astJsonBytes:Buffer.byteLength(JSON.stringify(ast)),summary:'{"nodes":[]}',freeQuota:{remaining:process.env.CLI_TEST_AFTER_TRIAL?0:8,limit:10}});
  }
  throw new Error('Unexpected path '+url.pathname);

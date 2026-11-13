@@ -71,3 +71,18 @@ test('resource limit errors preserve the observed amount, specific maximum and a
   await assert.rejects(run(directory,['node-ast','Abc123','1:2'],{CLI_TEST_LIMIT:'member'}),e=>{assert.match(e.stderr,/50,000/);assert.doesNotMatch(e.stderr,/subscribe|订阅：/);return true;});
  }finally{await rm(directory,{recursive:true,force:true});}
 });
+
+ test('dev login isolates credentials and both conversion commands select dev without exposing help',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'melonbuild-cli-dev-'));
+ try {
+  await run(directory,['login','--dev','--no-browser']);
+  const devCredential=JSON.parse(await readFile(join(directory,'dev','credential.json'),'utf8'));assert.equal(devCredential.token,token);
+  await assert.rejects(access(join(directory,'credential.json')));
+  await run(directory,['whoami','--dev']);
+  await assert.rejects(run(directory,['whoami']));
+  await run(directory,['node-ast','Abc123','1:2','--dev'],{CLI_TEST_DEV:'1'});
+  await run(directory,['node-summary','Abc123','1:2','--dev'],{CLI_TEST_DEV:'1'});
+  assert.doesNotMatch((await run(directory,['--help'])).stdout,/--dev/);
+  await run(directory,['logout','--dev']);await assert.rejects(access(join(directory,'dev','credential.json')));
+ }finally{await rm(directory,{recursive:true,force:true});}
+});
