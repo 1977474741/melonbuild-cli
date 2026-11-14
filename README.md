@@ -14,7 +14,7 @@
 需要 Node.js **22.15.0 或更高版本**，使用 pnpm 安装依赖。
 
 ```sh
-git clone --branch dev-1.0 https://github.com/1977474741/melonbuild-cli.git
+git clone --branch dev https://github.com/1977474741/melonbuild-cli.git
 cd melonbuild-cli
 corepack pnpm install --frozen-lockfile
 corepack pnpm run build
