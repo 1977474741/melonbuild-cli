@@ -40,6 +40,8 @@ const help=`MelonBuild CLI ${version}
 免费试用：与网站共用累计 10 次，每次完整 AST 最多 100 KB。
 10 次用完后，仍可免费获取不超过 30 KB 的完整 AST（紧凑 JSON，含图片链接）。
 图片二进制由本机下载，不计入 AST 大小。
+图片作为资源引用；类型、字节数和 SVG 内嵌图片标记见下载清单。
+请用图像工具查看图片，避免把 SVG 源码或 base64 读入模型上下文。
 有效服务端结果缓存命中不扣次数；补下载图片不调用 AST 接口。
 订阅：${DEFAULT_ORIGIN}/subscribe
 `;
@@ -169,6 +171,8 @@ async function writeAst(ast,{output,format,imageDir,overwrite,source}) {
     local=await localizeImages(ast,{imageDir,output,manifestPath:source?source+'.assets.json':undefined,signal:controller.signal,
       onProgress:info=>{if(info.ok)console.error((info.restored?'已复用：':'已下载：')+info.file);}});
     ast=local.ast;
+    const embedded=Object.values(local.assets).filter(asset=>asset.containsEmbeddedImages).length;
+    if(embedded)console.error(embedded+' 个 SVG 含内嵌图片，详情见 '+local.manifestPath+'。请通过图像工具查看，避免将 SVG 源码读入上下文。');
   }
   await emit(JSON.stringify(ast),output,overwrite);
   if(local?.failed.length) {

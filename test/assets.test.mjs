@@ -37,6 +37,49 @@ test('download failure retains original links and a retry manifest; later run fe
     assert.equal(JSON.parse(await readFile(first.manifestPath,'utf8')).failed.length,0);
   }finally{await rm(directory,{recursive:true,force:true});}
 });
+test('embedded SVG pixels stay in the asset; compact metadata is available before reading it, including on resume',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'melonbuild-embedded-svg-'));
+  const encoded='AAAA'.repeat(256*1024);
+  const mixed='<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><image xlink:href="data:image/png;base64,'+encoded+'"/></svg>';
+  const document=ast(),original=JSON.stringify(document);
+  try {
+    const options={imageDir:join(directory,'images'),output:join(directory,'ast.json'),fetchImpl:async()=>new Response(mixed,{headers:{'content-type':'image/svg+xml'}})};
+    const result=await localizeImages(document,options);
+    assert.equal(result.failed.length,0);assert.equal(JSON.stringify(document),original);
+    const entry=Object.values(result.assets)[0];
+    assert.equal(entry.mediaType,'image/svg+xml');assert.equal(entry.bytes,Buffer.byteLength(mixed));assert.equal(entry.containsEmbeddedImages,true);
+    assert.equal(await readFile(join(directory,'images',entry.file),'utf8'),mixed);
+    assert.ok(JSON.stringify(result.ast).length<2000);assert.ok(!JSON.stringify(result.ast).includes('data:image'));
+    const manifest=JSON.parse(await readFile(result.manifestPath,'utf8'));
+    assert.ok(JSON.stringify(manifest).length<2000);assert.ok(!JSON.stringify(manifest).includes(encoded));
+    // Existing manifests without resource metadata are upgraded from the verified local bytes.
+    for(const value of Object.values(manifest.assets)){delete value.mediaType;delete value.containsEmbeddedImages;}
+    await writeFile(result.manifestPath,JSON.stringify(manifest));
+    const resumed=await localizeImages(document,{...options,fetchImpl:async()=>{throw new Error('No network expected');}});
+    assert.equal(resumed.failed.length,0);assert.equal(Object.values(resumed.assets)[0].containsEmbeddedImages,true);
+    assert.equal(Object.values(JSON.parse(await readFile(result.manifestPath,'utf8')).assets)[0].mediaType,'image/svg+xml');
+  }finally{await rm(directory,{recursive:true,force:true});}
+});
+test('resource metadata distinguishes vector-only SVGs, href embedded images and raster assets',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'melonbuild-resource-types-'));
+  const cases=[
+    ['vector',svg,'image/svg+xml',false],
+    ['embedded','<svg><image href = \'data:image/jpeg;base64,AAAA\'/></svg>','image/svg+xml',true],
+    ['raster','PNG fixture','image/png',undefined],
+  ];
+  const document={nodes:cases.map(([name])=>({tag:'img',src:'https://s3-alpha.figma.com/'+name})),templates:{}};
+  try {
+    const result=await localizeImages(document,{imageDir:directory,fetchImpl:async input=>{
+      const entry=cases.find(([name])=>String(input).endsWith('/'+name));
+      return new Response(entry[1],{headers:{'content-type':entry[2]}});
+    }});
+    assert.equal(result.failed.length,0);
+    for(const [name,body,type,embedded] of cases){
+      const entry=Object.values(result.assets).find(asset=>asset.url.endsWith('/'+name));
+      assert.equal(entry.mediaType,type);assert.equal(entry.bytes,Buffer.byteLength(body));assert.equal(entry.containsEmbeddedImages,embedded);
+    }
+  }finally{await rm(directory,{recursive:true,force:true});}
+});
 test('images reject untrusted hosts, unsafe redirects, oversized content and HTML error bodies',async()=>{
   for(const value of ['http://s3-alpha.figma.com/a','https://localhost/a','https://s3-alpha.figma.com.evil.test/a','https://u:p@s3-alpha.figma.com/a','https://s3-alpha.figma.com:444/a'])assert.throws(()=>assetUrl(value));
   for(const response of [()=>new Response('',{status:302,headers:{location:'https://127.0.0.1/private'}}),()=>new Response('too large',{headers:{'content-type':'image/png'}}),()=>new Response('<html>bad</html>',{headers:{'content-type':'text/html'}})]) {

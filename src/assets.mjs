@@ -79,6 +79,13 @@ export function replaceLinks(ast,replacements) {
   return mapImages(ast,url=>replacements.get(url)??url);
 }
 const extensions={'image/svg+xml':'svg','image/png':'png','image/jpeg':'jpg','image/gif':'gif','image/webp':'webp','image/avif':'avif','image/bmp':'bmp','image/x-icon':'ico','application/pdf':'pdf'};
+const mediaTypes=Object.fromEntries(Object.entries(extensions).map(([type,extension])=>[extension,type]));
+function resourceInfo(data,extension) {
+  // Inspect locally without copying the SVG (and its encoded pixels) into the AST or manifest.
+  return {mediaType:mediaTypes[extension],...(extension==='svg'?{
+    containsEmbeddedImages:/\b(?:xlink:)?href\s*=\s*["']\s*data:image\//i.test(data.toString('utf8')),
+  }:{})};
+}
 async function download(url,{fetchImpl,signal,maxImageBytes}) {
   let current=assetUrl(url);
   for(let redirects=0;redirects<=5;redirects++) {
@@ -109,14 +116,14 @@ export async function localizeImages(ast,{imageDir,output,manifestPath,fetchImpl
       if(signal?.aborted)throw new CliError('CANCELED','图片下载已取消。');
       const url=urls[cursor++],id=digest(url);
       try {
-        let file,checksum,bytes,restored=false;
+        let file,checksum,bytes,info,restored=false;
         const cached=previous[id];
         if(cached&&cached.file?.startsWith(id+'.')&&/^[a-f0-9]{64}\.(svg|png|jpg|gif|webp|avif|bmp|ico|pdf)$/.test(cached.file)) {
           file=join(directory,cached.file);
           const stat=await lstat(file).catch(()=>null);
           if(stat?.isFile()&&!stat.isSymbolicLink()&&stat.size<=maxImageBytes) {
             const data=await readFile(file);
-            if(digest(data)===cached.sha256){checksum=cached.sha256;bytes=data.length;restored=true;}
+            if(digest(data)===cached.sha256){checksum=cached.sha256;bytes=data.length;info=resourceInfo(data,cached.file.split('.').pop());restored=true;}
           }
         }
         if(!restored) {
@@ -126,6 +133,7 @@ export async function localizeImages(ast,{imageDir,output,manifestPath,fetchImpl
             catch(e){if(signal?.aborted||e instanceof CliError&&!(e.status>=500)||attempt===2)throw e;}
           }
           bytes=result.data.length;checksum=digest(result.data);file=join(directory,id+'.'+result.extension);
+          info=resourceInfo(result.data,result.extension);
           if(totalBytes+bytes>maxTotalBytes)throw new CliError('IMAGE_TOTAL_TOO_LARGE','图片总体积超过本次下载上限。');
           const existing=await lstat(file).catch(()=>null);
           if(existing) {
@@ -136,7 +144,7 @@ export async function localizeImages(ast,{imageDir,output,manifestPath,fetchImpl
         totalBytes+=bytes;
         if(totalBytes>maxTotalBytes)throw new CliError('IMAGE_TOTAL_TOO_LARGE','图片总体积超过本次下载上限。');
         const filename=file.split(sep).pop();
-        assets[id]={url,file:filename,sha256:checksum,bytes};
+        assets[id]={url,file:filename,sha256:checksum,bytes,...info};
         const local=relative(base,file).split(sep).join('/');
         replacements.set(url,local.startsWith('.')?local:'./'+local);
         onProgress({ok:true,restored,file,total:urls.length});
@@ -145,5 +153,5 @@ export async function localizeImages(ast,{imageDir,output,manifestPath,fetchImpl
   };
   try{const outcomes=await Promise.allSettled(Array.from({length:Math.min(4,urls.length)},worker));const rejected=outcomes.find(r=>r.status==='rejected');if(rejected)throw rejected.reason;}
   finally{await atomicWrite(manifestPath,JSON.stringify({version:1,assets:{...previous,...assets},failed},null,2)+'\n',{overwrite:true,privateFile:true});}
-  return {ast:replaceLinks(ast,replacements),total:urls.length,downloaded:replacements.size,failed,manifestPath};
+  return {ast:replaceLinks(ast,replacements),total:urls.length,downloaded:replacements.size,failed,manifestPath,assets};
 }
