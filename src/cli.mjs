@@ -175,8 +175,8 @@ async function writeAst(ast,{output,format,imageDir,overwrite,source,quiet}) {
     local=await localizeImages(ast,{imageDir,output,manifestPath:source?source+'.assets.json':undefined,signal:controller.signal,
       onProgress:info=>{if(info.ok&&!quiet)console.error((info.restored?'已复用：':'已下载：')+info.file);}});
     ast=local.ast;
-    const assets=Object.values(local.assets),files=new Set(assets.map(asset=>asset.file)),repaired=assets.filter(asset=>asset.repairedSvg).length;
-    console.error('图片 '+files.size+' 个文件'+(files.size<assets.length?'（'+(assets.length-files.size)+' 张内容相同的已合并）':'')+(repaired?'，修复了 '+repaired+' 个 Figma 导出的不完整 SVG':'')+'。');
+    // 命名、去重、补全不完整 SVG 都是下载的内部处理，结果就是可直接使用的文件，不打扰调用方
+    console.error('图片已保存：'+new Set(Object.values(local.assets).map(asset=>asset.file)).size+' 个文件。');
     const embedded=Object.values(local.assets).filter(asset=>asset.containsEmbeddedImages).length;
     if(embedded)console.error(embedded+' 个 SVG 含内嵌图片，详情见 '+local.manifestPath+'。请通过图像工具查看，避免将 SVG 源码读入上下文。');
   }
