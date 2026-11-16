@@ -30,6 +30,7 @@ const help=`MelonBuild CLI ${version}
   --image-local-path <dir>    --image-dir 的别名
   --image-source remote|local 未指定目录时默认保留远端链接
   --reuse exact|none|params|slots|components
+  -q, --quiet                 不逐张打印图片下载进度，只输出汇总
   --image-scale 1|2|3|4|auto  含照片的整组图片按 PNG 渲染的倍率；auto（默认）按屏幕宽度自动选
   --reuse-meta --with-ids --no-styles
   --force-refresh            重新生成；试用期间成功后扣一次
@@ -72,7 +73,7 @@ async function main() {
   const {values:flags,positionals}=parseArgs({allowPositionals:true,options:{
     help:{type:'boolean',short:'h'},version:{type:'boolean',short:'v'},json:{type:'boolean'},output:{type:'string',short:'o'},format:{type:'string'},
     'image-dir':{type:'string'},'image-local-path':{type:'string'},'image-source':{type:'string'},reuse:{type:'string'},'reuse-meta':{type:'boolean'},
-    'with-ids':{type:'boolean'},'image-scale':{type:'string'},'no-styles':{type:'boolean'},'force-refresh':{type:'boolean'},overwrite:{type:'boolean'},'no-browser':{type:'boolean'},all:{type:'boolean'},dev:{type:'boolean'},
+    'with-ids':{type:'boolean'},'image-scale':{type:'string'},quiet:{type:'boolean',short:'q'},'no-styles':{type:'boolean'},'force-refresh':{type:'boolean'},overwrite:{type:'boolean'},'no-browser':{type:'boolean'},all:{type:'boolean'},dev:{type:'boolean'},
   }});
   machine=!!flags.json;
   if(flags.version){console.log(version);return;}
@@ -97,7 +98,7 @@ async function main() {
     const source=resolve(positionals[0]);
     if(source===output)throw new CliError('INVALID_OPTIONS','请使用不同的输出路径，保留远端 JSON 供后续重试。');
     const ast=validateAst(JSON.parse(await readFile(source,'utf8')));
-    await writeAst(ast,{output,format,imageDir,overwrite:flags.overwrite,source});return;
+    await writeAst(ast,{output,format,imageDir,overwrite:flags.overwrite,source,quiet:!!flags.quiet});return;
   }
   const saved=command==='login'?null:await loadCredential(directory),origin=apiOrigin(process.env.MELONBUILD_API_URL??saved?.origin??DEFAULT_ORIGIN);
   if(command==='login') {
@@ -152,7 +153,7 @@ async function main() {
     if(result.astVersion!=='1')throw new CliError('AST_VERSION_UNSUPPORTED','AST 格式已更新，请升级 melonbuild-cli。');
     const ast=validateAst(JSON.parse(result.ast));
     if(source)await atomicWrite(source,JSON.stringify(ast),{overwrite:!!flags.overwrite,privateFile:true});
-    await writeAst(ast,{output,format,imageDir,overwrite:flags.overwrite,source});
+    await writeAst(ast,{output,format,imageDir,overwrite:flags.overwrite,source,quiet:!!flags.quiet});
   }else {
     if(typeof result.summary!=='string')throw new CliError('INVALID_RESPONSE','服务未返回摘要。');
     await emit(JSON.stringify(JSON.parse(result.summary)),output,flags.overwrite);
@@ -167,13 +168,15 @@ async function emit(content,output,overwrite) {
   if(output){await atomicWrite(output,content,{overwrite:!!overwrite});console.error('已保存：'+output);}
   else await new Promise((resolve,reject)=>process.stdout.write(content,e=>e?reject(e):resolve()));
 }
-async function writeAst(ast,{output,format,imageDir,overwrite,source}) {
+async function writeAst(ast,{output,format,imageDir,overwrite,source,quiet}) {
   let local;
   if(imageDir) {
     console.error('在本机下载 '+imageLinks(ast).length+' 张去重图片……');
     local=await localizeImages(ast,{imageDir,output,manifestPath:source?source+'.assets.json':undefined,signal:controller.signal,
-      onProgress:info=>{if(info.ok)console.error((info.restored?'已复用：':'已下载：')+info.file);}});
+      onProgress:info=>{if(info.ok&&!quiet)console.error((info.restored?'已复用：':'已下载：')+info.file);}});
     ast=local.ast;
+    const assets=Object.values(local.assets),files=new Set(assets.map(asset=>asset.file)),repaired=assets.filter(asset=>asset.repairedSvg).length;
+    console.error('图片 '+files.size+' 个文件'+(files.size<assets.length?'（'+(assets.length-files.size)+' 张内容相同的已合并）':'')+(repaired?'，修复了 '+repaired+' 个 Figma 导出的不完整 SVG':'')+'。');
     const embedded=Object.values(local.assets).filter(asset=>asset.containsEmbeddedImages).length;
     if(embedded)console.error(embedded+' 个 SVG 含内嵌图片，详情见 '+local.manifestPath+'。请通过图像工具查看，避免将 SVG 源码读入上下文。');
   }

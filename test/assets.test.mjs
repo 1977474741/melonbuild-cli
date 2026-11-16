@@ -16,7 +16,7 @@ test('local downloader finds node, CSS and template links; deduplicates, rewrite
     assert.deepEqual(imageLinks(ast()),[url]);
     const options={imageDir:join(directory,'images'),output:join(directory,'ast.json'),fetchImpl};
     const first=await localizeImages(ast(),options);assert.equal(calls,1);assert.equal(first.failed.length,0);
-    const local=first.ast.nodes[0].src;assert.match(local,/^\.\/images\/[a-f0-9]{64}\.svg$/);
+    const local=first.ast.nodes[0].src;assert.match(local,/^\.\/images\/icon-image-[a-f0-9]{8}\.svg$/);
     assert.equal(first.ast.templates.T0.params.p,local);assert.equal(first.ast.nodes[1].args.p,local);
     assert.equal(first.ast.nodes[2].text,url);assert.equal(first.ast.name,url);assert.ok(first.ast.globalStyles.fill_a.backgroundImage.includes(local));
     assert.equal(await readFile(join(directory,local),'utf8'),svg);
@@ -112,4 +112,30 @@ test('nested template image parameters propagate without rewriting an unrelated 
  const local=replaceLinks(document,new Map([[url,'./images/icon.svg']]));
  assert.equal(local.templates.Outer.params.picture,'./images/icon.svg');assert.equal(local.templates.Outer.params.copy,url);
  assert.equal(local.nodes[0].args.picture,'./images/icon.svg');assert.equal(local.nodes[0].args.copy,url);
+});
+
+test('files are named after their Figma layers, identical images are stored once, broken SVG tags are closed',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'melonbuild-names-'));
+ const a='https://s3-alpha.figma.com/a',b='https://s3-alpha.figma.com/b',photo='https://s3-alpha.figma.com/photo',broken='https://s3-alpha.figma.com/broken';
+ const brokenSvg='<svg xmlns="http://www.w3.org/2000/svg"><mask id="m"><rect width="1" height="1"/></mask><g mask="url(#m)"><rect width="1" height="1"/><defs><linearGradient id="g"/></defs></svg>';
+ const document={nodes:[{tag:'FRAME',name:'Toolbar',children:[
+   {tag:'IMAGE-SVG',name:'Vector',src:a},          // 自动名：向上取祖先的名字
+   {tag:'IMAGE-SVG',name:'1-Close 关闭 X',src:b},
+   {tag:'IMAGE-SVG',name:'活动封面',src:photo},
+   {tag:'IMAGE-SVG',name:'Rectangle 53',src:broken},
+ ]}],templates:{}};
+ const bodies={[a]:svg,[b]:svg,[photo]:'PNG fixture',[broken]:brokenSvg};
+ const types={[photo]:'image/png'};
+ try {
+  const result=await localizeImages(document,{imageDir:join(directory,'images'),output:join(directory,'ast.json'),
+    fetchImpl:async input=>new Response(bodies[String(input)],{headers:{'content-type':types[String(input)]??'image/svg+xml'}})});
+  const [toolbar,close,cover,fixed]=result.ast.nodes[0].children.map(child=>child.src);
+  assert.match(toolbar,/\/icon-toolbar-[a-f0-9]{8}\.svg$/);
+  assert.equal(close,toolbar,'内容完全相同的两张图共用一个文件');
+  assert.match(cover,/\/活动封面-[a-f0-9]{8}\.png$/);
+  assert.match(fixed,/\/icon-toolbar-[a-f0-9]{8}\.svg$/);
+  const repaired=await readFile(join(directory,fixed),'utf8');
+  assert.match(repaired,/<\/g><\/svg>$/);
+  assert.equal(Object.values(result.assets).find(entry=>entry.url===broken).repairedSvg,true);
+ }finally{await rm(directory,{recursive:true,force:true});}
 });

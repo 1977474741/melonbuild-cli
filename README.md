@@ -96,7 +96,7 @@ node dist/cli.mjs node-ast FILEKEY 12:34 \
   --image-dir ./public/images
 ```
 
-CLI 下载 AST 中引用的图片，并将引用改成相对于 AST 输出文件的本地路径。图片目录与 AST 输出目录可分别指定；不传 `--output` 时，路径相对于当前工作目录。
+CLI 下载 AST 中引用的图片，并将引用改成相对于 AST 输出文件的本地路径。文件按 Figma 图层命名（如 `icon-close-x-3f2a9c1b.svg`），内容完全相同的图片只保存一份；Figma 偶尔导出标签不完整的 SVG，下载时会自动补全，避免浏览器无法显示。图片目录与 AST 输出目录可分别指定；不传 `--output` 时，路径相对于当前工作目录。
 
 不指定图片目录时，AST 保留原始图片链接。
 
@@ -146,6 +146,7 @@ node dist/cli.mjs node-summary \
 | `--overwrite` | 允许覆盖已有输出文件 |
 | `--force-refresh` | 获取最新设计，跳过有效结果缓存 |
 | `--reuse <mode>` | 复用模式：`exact`、`none`、`params`、`slots`、`components`，默认 `exact` |
+| `-q, --quiet` | 不逐张打印图片下载进度，只输出汇总（适合脚本和 AI 工具调用） |
 | `--image-scale <1-4\|auto>` | 含照片的整组图片按 PNG 渲染的倍率，默认 `auto`：屏宽 ≥ 700 的移动端 2x/3x 稿取 1，其余取 2 |
 | `--reuse-meta` | 保留复用关系信息 |
 | `--with-ids` | 在参数化复用模式中保留全部节点 ID |
