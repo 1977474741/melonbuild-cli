@@ -146,6 +146,7 @@ node dist/cli.mjs node-summary \
 | `--overwrite` | 允许覆盖已有输出文件 |
 | `--force-refresh` | 获取最新设计，跳过有效结果缓存 |
 | `--reuse <mode>` | 复用模式：`exact`、`none`、`params`、`slots`、`components`，默认 `exact` |
+| `--image-scale <1-4\|auto>` | 含照片的整组图片按 PNG 渲染的倍率，默认 `auto`：屏宽 ≥ 700 的移动端 2x/3x 稿取 1，其余取 2 |
 | `--reuse-meta` | 保留复用关系信息 |
 | `--with-ids` | 在参数化复用模式中保留全部节点 ID |
 | `--no-styles` | 不输出样式块 |

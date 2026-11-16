@@ -30,6 +30,7 @@ const help=`MelonBuild CLI ${version}
   --image-local-path <dir>    --image-dir 的别名
   --image-source remote|local 未指定目录时默认保留远端链接
   --reuse exact|none|params|slots|components
+  --image-scale 1|2|3|4|auto  含照片的整组图片按 PNG 渲染的倍率；auto（默认）按屏幕宽度自动选
   --reuse-meta --with-ids --no-styles
   --force-refresh            重新生成；试用期间成功后扣一次
   --overwrite                允许覆盖指定输出文件
@@ -71,7 +72,7 @@ async function main() {
   const {values:flags,positionals}=parseArgs({allowPositionals:true,options:{
     help:{type:'boolean',short:'h'},version:{type:'boolean',short:'v'},json:{type:'boolean'},output:{type:'string',short:'o'},format:{type:'string'},
     'image-dir':{type:'string'},'image-local-path':{type:'string'},'image-source':{type:'string'},reuse:{type:'string'},'reuse-meta':{type:'boolean'},
-    'with-ids':{type:'boolean'},'no-styles':{type:'boolean'},'force-refresh':{type:'boolean'},overwrite:{type:'boolean'},'no-browser':{type:'boolean'},all:{type:'boolean'},dev:{type:'boolean'},
+    'with-ids':{type:'boolean'},'image-scale':{type:'string'},'no-styles':{type:'boolean'},'force-refresh':{type:'boolean'},overwrite:{type:'boolean'},'no-browser':{type:'boolean'},all:{type:'boolean'},dev:{type:'boolean'},
   }});
   machine=!!flags.json;
   if(flags.version){console.log(version);return;}
@@ -84,6 +85,8 @@ async function main() {
   if(format!=='json')throw new CliError('INVALID_FORMAT','对外 CLI 固定输出紧凑 JSON。');
   if(command==='node-summary'&&(format!=='json'||imageDir))throw new CliError('INVALID_OPTIONS','摘要输出 JSON，图片请通过 node-ast 获取。');
   if(flags.reuse&&!['none','exact','params','slots','components'].includes(flags.reuse))throw new CliError('INVALID_REUSE','不支持该复用模式。');
+  if(flags['image-scale']!==undefined&&!['1','2','3','4','auto'].includes(flags['image-scale']))throw new CliError('INVALID_OPTIONS','--image-scale 只接受 1、2、3、4 或 auto。');
+  if(flags['image-scale']!==undefined&&command!=='node-ast')throw new CliError('INVALID_OPTIONS','--image-scale 仅用于 node-ast。');
   if(flags['image-source']&&!['remote','local'].includes(flags['image-source']))throw new CliError('INVALID_OPTIONS','--image-source 支持 remote 或 local。');
   if(flags['image-source']==='local'&&!imageDir)throw new CliError('IMAGE_DIR_REQUIRED','本地图片需要指定 --image-dir。');
   if(flags['image-source']==='remote'&&imageDir)throw new CliError('INVALID_OPTIONS','已指定下载目录，请移除 --image-source remote。');
@@ -136,7 +139,7 @@ async function main() {
   }
   const url=target(positionals);
   const body={url,outputs:[command==='node-ast'?'ast':'summary'],format:'json',...(flags.dev?{clientMode:'dev'}:{}),...(flags['force-refresh']?{forceRefresh:true}:{})};
-  if(command==='node-ast')Object.assign(body,{reuse:flags.reuse??'exact',includeStyles:!flags['no-styles'],reuseMeta:!!flags['reuse-meta'],withIds:!!flags['with-ids']});
+  if(command==='node-ast')Object.assign(body,{reuse:flags.reuse??'exact',includeStyles:!flags['no-styles'],reuseMeta:!!flags['reuse-meta'],withIds:!!flags['with-ids'],...(flags['image-scale']&&flags['image-scale']!=='auto'?{imageScale:Number(flags['image-scale'])}:{})});
   // Check local destinations before requesting a potentially chargeable generation.
   let source;
   if(command==='node-ast'&&imageDir) {

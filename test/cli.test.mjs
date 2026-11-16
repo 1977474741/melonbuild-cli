@@ -86,3 +86,16 @@ test('resource limit errors preserve the observed amount, specific maximum and a
   await run(directory,['logout','--dev']);await assert.rejects(access(join(directory,'dev','credential.json')));
  }finally{await rm(directory,{recursive:true,force:true});}
 });
+
+test('--image-scale is validated locally and forwarded only when it is not the auto default',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'melonbuild-cli-scale-'));
+ try {
+  await writeFile(join(directory,'credential.json'),JSON.stringify({origin:'https://www.melonbuild.com',token,expiresAt:new Date(Date.now()+86400000).toISOString()}),{mode:0o600});
+  const bodies=join(directory,'bodies.log');
+  await run(directory,['node-ast','Abc123','1:2','--image-scale','1'],{CLI_TEST_BODY:bodies});
+  await run(directory,['node-ast','Abc123','1:2','--image-scale','auto'],{CLI_TEST_BODY:bodies});
+  const [fixed,auto]=(await readFile(bodies,'utf8')).trim().split('\n').map(line=>JSON.parse(line));
+  assert.equal(fixed.imageScale,1);assert.equal('imageScale' in auto,false);
+  await assert.rejects(run(directory,['node-ast','Abc123','1:2','--image-scale','5']),e=>e.code===1&&/只接受 1、2、3、4 或 auto/.test(e.stderr));
+ }finally{await rm(directory,{recursive:true,force:true});}
+});

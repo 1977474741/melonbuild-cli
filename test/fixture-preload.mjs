@@ -11,6 +11,7 @@ globalThis.fetch=async(input,options)=>{
  if(url.pathname.endsWith('/account'))return Response.json({actor:{displayName:'Fixture User',tier:'free'},freeQuota:{remaining,limit:10},freeAstMaxBytes:remaining?100000:30000,afterTrialAstMaxBytes:30000,subscriptionUrl:url.origin+'/subscribe'});
  if(url.pathname.endsWith('/logout')){const body=JSON.parse(options.body);if(body.all!==undefined&&body.all!==true)throw new Error('Invalid revocation request');return Response.json({ok:true});}
  if(url.pathname.endsWith('/conversions')){
+  if(process.env.CLI_TEST_BODY)appendFileSync(process.env.CLI_TEST_BODY,String(options.body)+'\n');
   if(process.env.CLI_TEST_LIMIT){
    const member=process.env.CLI_TEST_LIMIT==='member';
    const limit={kind:'nodes',max:member?50000:6000,actual:member?50001:6001,atLeast:true};
