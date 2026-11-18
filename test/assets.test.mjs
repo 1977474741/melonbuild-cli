@@ -139,3 +139,22 @@ test('files are named after their Figma layers, identical images are stored once
   assert.equal(Object.values(result.assets).find(entry=>entry.url===broken).repairedSvg,true);
  }finally{await rm(directory,{recursive:true,force:true});}
 });
+
+test('PNG 下载后做无损压缩：格式不变、体积变小；不是合法 PNG 时原样保存',async()=>{
+  const {deflateSync,crc32}=await import('node:zlib');
+  const chunk=(type,data)=>{const len=Buffer.alloc(4);len.writeUInt32BE(data.length);const body=Buffer.concat([Buffer.from(type),data]);const crc=Buffer.alloc(4);crc.writeUInt32BE(crc32(body));return Buffer.concat([len,body,crc]);};
+  const w=64,h=64,raw=Buffer.alloc((w*4+1)*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const o=y*(w*4+1)+1+x*4;raw[o]=x*4;raw[o+1]=y*4;raw[o+2]=128;raw[o+3]=255;}
+  const ihdr=Buffer.alloc(13);ihdr.writeUInt32BE(w,0);ihdr.writeUInt32BE(h,4);ihdr[8]=8;ihdr[9]=6;
+  const png=Buffer.concat([Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]),chunk('IHDR',ihdr),chunk('IDAT',deflateSync(raw,{level:0})),chunk('IEND',Buffer.alloc(0))]);
+  const photo='https://s3-alpha.figma.com/photo.png';
+  const directory=await mkdtemp(join(tmpdir(),'melonbuild-png-'));
+  try {
+    const result=await localizeImages({nodes:[{tag:'img',src:photo}]},{imageDir:directory,fetchImpl:async()=>new Response(png,{headers:{'content-type':'image/png'}})});
+    const entry=Object.values(result.assets)[0],saved=await readFile(join(directory,entry.file));
+    assert.match(entry.file,/\.png$/);
+    assert.ok(saved.subarray(0,8).equals(png.subarray(0,8)));
+    assert.ok(saved.length<png.length/2,`压缩后 ${saved.length} 字节，原图 ${png.length}`);
+    assert.equal(entry.bytes,saved.length);
+  }finally{await rm(directory,{recursive:true,force:true});}
+});

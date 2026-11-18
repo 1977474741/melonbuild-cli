@@ -3,6 +3,7 @@ import {mkdir,readFile,rm,lstat} from 'node:fs/promises';
 import {resolve,relative,dirname,join,sep} from 'node:path';
 import {atomicWrite} from './storage.mjs';
 import {CliError,readBounded} from './api.mjs';
+import {createPngOptimizer} from './png.mjs';
 const digest=value=>createHash('sha256').update(value).digest('hex');
 export function assetUrl(value) {
   let url;try{url=new URL(value);}catch{throw new CliError('INVALID_IMAGE_URL','AST 图片链接无效。');}
@@ -163,7 +164,7 @@ export async function localizeImages(ast,{imageDir,output,manifestPath,fetchImpl
   await mkdir(directory,{recursive:true});
   manifestPath??=join(directory,'.melonbuild-assets.json');
   let previous={};try{previous=JSON.parse(await readFile(manifestPath,'utf8')).assets??{};}catch{}
-  const urls=imageLinks(ast),names=imageNames(ast),assets={},failed=[],replacements=new Map(),written=new Set();let cursor=0,totalBytes=0;
+  const png=createPngOptimizer(),urls=imageLinks(ast),names=imageNames(ast),assets={},failed=[],replacements=new Map(),written=new Set();let cursor=0,totalBytes=0;
   const worker=async()=>{
     while(cursor<urls.length) {
       if(signal?.aborted)throw new CliError('CANCELED','图片下载已取消。');
@@ -189,6 +190,8 @@ export async function localizeImages(ast,{imageDir,output,manifestPath,fetchImpl
             const text=result.data.toString('utf8'),fixed=repairSvg(text);
             if(fixed!==text){result.data=Buffer.from(fixed,'utf8');result.repaired=true;}
           }
+          // PNG 做无损压缩：格式不变、逐像素一致
+          if(result.extension==='png')result.data=await png.optimize(result.data);
           bytes=result.data.length;checksum=digest(result.data);
           file=join(directory,fileName(names.get(url),id,result.extension));
           info={...resourceInfo(result.data,result.extension),...(result.repaired?{repairedSvg:true}:{})};
@@ -223,6 +226,6 @@ export async function localizeImages(ast,{imageDir,output,manifestPath,fetchImpl
       assets[id]={...entry,file:first.file};replacements.set(url,first.local);
     }
   }
-  finally{await atomicWrite(manifestPath,JSON.stringify({version:1,assets:{...previous,...assets},failed},null,2)+'\n',{overwrite:true,privateFile:true});}
+  finally{await png.close();await atomicWrite(manifestPath,JSON.stringify({version:1,assets:{...previous,...assets},failed},null,2)+'\n',{overwrite:true,privateFile:true});}
   return {ast:replaceLinks(ast,replacements),total:urls.length,downloaded:replacements.size,failed,manifestPath,assets};
 }
