@@ -19,7 +19,7 @@ function limitDetails(value) {
 }
 export function createApi(origin,{token,fetchImpl=fetch,signal}={}) {
   origin=apiOrigin(origin);
-  return async function api(path,body,{timeoutMs=210000}={}) {
+  return async function api(path,body,{timeoutMs=660000}={}) {
     const url=new URL(path,origin);
     if(url.origin!==origin||url.username||url.password)throw new CliError('API_ORIGIN_MISMATCH','拒绝向其他地址发送平台登录凭据。');
     let response;
