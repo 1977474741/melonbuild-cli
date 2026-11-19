@@ -9,39 +9,38 @@
 
 网站：[melonbuild.com](https://www.melonbuild.com)
 
-## 从源码运行
+## 安装
 
-需要 Node.js **22.15.0 或更高版本**，使用 pnpm 安装依赖。
+需要 Node.js **22.15.0 或更高版本**。
 
 ```sh
-git clone --branch dev https://github.com/1977474741/melonbuild-cli.git
-cd melonbuild-cli
-corepack pnpm install --frozen-lockfile
-corepack pnpm run build
-node dist/cli.mjs --help
+npm i -g melonbuild-cli
+melonbuild --help
 ```
 
-以下示例均在仓库目录内运行。登录和设计稿转换需要连接 MelonBuild 在线服务；服务未开放或不可用时，仍可对已有 AST 执行本地图片下载。
+登录和设计稿转换需要连接 MelonBuild 在线服务；已有 AST 时，图片下载可在本地单独执行。
+
+配合 AI 编程工具使用时，可再安装 MelonBuild skill：`npx melonbuild-skill`。
 
 ## Windows / PowerShell
 
 PowerShell 中可使用以下单行命令，路径包含空格时用双引号包裹：
 
 ```powershell
-node .\dist\cli.mjs login
-node .\dist\cli.mjs node-ast "https://www.figma.com/design/FILEKEY?node-id=12-34" --output ".\design\ast.json" --image-dir ".\public\images"
-node .\dist\cli.mjs whoami
+melonbuild login
+melonbuild node-ast "https://www.figma.com/design/FILEKEY?node-id=12-34" --output ".\design\ast.json" --image-dir ".\public\images"
+melonbuild whoami
 ```
 
-下文多行示例中的 `\` 是 Bash 续行符，PowerShell 中请改为单行执行。若 PowerShell 的脚本策略阻止 Corepack，可用 `corepack.cmd pnpm ...` 执行相同操作。
+下文多行示例中的 `\` 是 Bash 续行符，PowerShell 中请改为单行执行。若 PowerShell 的脚本策略阻止运行 `melonbuild`，可改用 `melonbuild.cmd`。
 
 Windows 凭据使用用户配置目录的系统权限；Unix 的 `0700` / `0600` 权限检查不适用于 Windows。
 
 ## 登录
 
 ```sh
-node dist/cli.mjs login
-node dist/cli.mjs whoami
+melonbuild login
+melonbuild whoami
 ```
 
 登录时会打开浏览器。核对页面与终端中的登录码，使用 Figma 账号完成登录并确认。已经登录 MelonBuild 网站时，可直接确认 CLI 登录。
@@ -49,19 +48,19 @@ node dist/cli.mjs whoami
 无法自动打开浏览器时：
 
 ```sh
-node dist/cli.mjs login --no-browser
+melonbuild login --no-browser
 ```
 
 按终端提示手动打开链接。退出当前设备：
 
 ```sh
-node dist/cli.mjs logout
+melonbuild logout
 ```
 
 如需撤销该账号全部设备上的 CLI 登录凭据：
 
 ```sh
-node dist/cli.mjs logout --all
+melonbuild logout --all
 ```
 
 怀疑旧凭据泄漏时，可先重新登录，再执行此命令。它会使该账号所有 CLI 凭据失效，不退出网站登录。
@@ -71,7 +70,7 @@ node dist/cli.mjs logout --all
 在 Figma 中选中目标画板或节点，复制包含 `node-id` 的链接：
 
 ```sh
-node dist/cli.mjs node-ast \
+melonbuild node-ast \
   'https://www.figma.com/design/FILEKEY?node-id=12-34' \
   --output ./design/ast.json
 ```
@@ -79,7 +78,7 @@ node dist/cli.mjs node-ast \
 也可以分别传入文件 Key 和节点 ID：
 
 ```sh
-node dist/cli.mjs node-ast FILEKEY 12:34 --output ./design/ast.json
+melonbuild node-ast FILEKEY 12:34 --output ./design/ast.json
 ```
 
 输出固定为紧凑 JSON。目标可以是画板、分区、页面或组件；每次指定一个目标，其内部可以包含多个页面。暂不支持整文件根节点和逗号分隔的多个目标。
@@ -91,7 +90,7 @@ node dist/cli.mjs node-ast FILEKEY 12:34 --output ./design/ast.json
 添加 `--image-dir`，指定图片保存目录：
 
 ```sh
-node dist/cli.mjs node-ast FILEKEY 12:34 \
+melonbuild node-ast FILEKEY 12:34 \
   --output ./design/ast.json \
   --image-dir ./public/images
 ```
@@ -117,7 +116,7 @@ CLI 下载 AST 中引用的图片，并将引用改成相对于 AST 输出文件
 部分图片下载失败时，可使用原始 AST 重试：
 
 ```sh
-node dist/cli.mjs download-images ./design/ast.json.remote.json \
+melonbuild download-images ./design/ast.json.remote.json \
   --image-dir ./public/images \
   --output ./design/ast.json \
   --overwrite
@@ -132,7 +131,7 @@ PNG 下载后会做无损压缩（oxipng）：格式不变、逐像素一致，�
 ## 获取设计摘要
 
 ```sh
-node dist/cli.mjs node-summary \
+melonbuild node-summary \
   'https://www.figma.com/design/FILEKEY?node-id=12-34' \
   --output ./design/summary.json
 ```
@@ -149,7 +148,7 @@ node dist/cli.mjs node-summary \
 | `--force-refresh` | 获取最新设计，跳过有效结果缓存 |
 | `--reuse <mode>` | 复用模式：`exact`、`none`、`params`、`slots`、`components`，默认 `exact` |
 | `-q, --quiet` | 不逐张打印图片下载进度，只输出汇总（适合脚本和 AI 工具调用） |
-| `--image-scale <1-4\|auto>` | 含照片的整组图片按 PNG 渲染的倍率，默认 `auto`：屏宽 ≥ 700 的移动端 2x/3x 稿取 1，其余取 2 |
+| `--image-scale <1-4\|auto>` | 含照片的整组图片按 PNG 渲染的倍率，默认 `auto`：按图片所在屏幕的倍率自动选，2x/3x 稿取 1，1x 稿取 2 |
 | `--reuse-meta` | 保留复用关系信息 |
 | `--with-ids` | 在参数化复用模式中保留全部节点 ID |
 | `--no-styles` | 不输出样式块 |
@@ -174,7 +173,7 @@ node dist/cli.mjs node-summary \
 JSON 正文输出到 stdout，进度、额度提示和错误输出到 stderr。账号查询支持：
 
 ```sh
-node dist/cli.mjs whoami --json
+melonbuild whoami --json
 ```
 
 | 退出码 | 含义 |
@@ -201,7 +200,12 @@ node dist/cli.mjs whoami --json
 
 ## 开发
 
+需要 pnpm：
+
 ```sh
+git clone https://github.com/1977474741/melonbuild-cli.git
+cd melonbuild-cli
+corepack pnpm install --frozen-lockfile
 corepack pnpm run build
 corepack pnpm test
 ```
@@ -210,4 +214,4 @@ corepack pnpm test
 
 ## 许可证
 
-[MIT](LICENSE)
+[MIT](LICENSE)。PNG 压缩使用的 oxipng（WebAssembly 版本来自 @jsquash/oxipng）的许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
