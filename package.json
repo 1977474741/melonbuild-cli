@@ -1,6 +1,6 @@
 {
   "name": "melonbuild-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MelonBuild CLI：登录 Figma，获取设计稿的结构化 AST，并把图片下载到本地",
   "type": "module",
   "bin": {
