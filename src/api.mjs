@@ -19,7 +19,7 @@ function limitDetails(value) {
 }
 export function createApi(origin,{token,fetchImpl=fetch,signal}={}) {
   origin=apiOrigin(origin);
-  return async function api(path,body,{timeoutMs=210000}={}) {
+  return async function api(path,body,{timeoutMs=660000}={}) {
     const url=new URL(path,origin);
     if(url.origin!==origin||url.username||url.password)throw new CliError('API_ORIGIN_MISMATCH','拒绝向其他地址发送平台登录凭据。');
     let response;
@@ -27,8 +27,15 @@ export function createApi(origin,{token,fetchImpl=fetch,signal}={}) {
       headers:{accept:'application/json',...(body===undefined?{}:{'content-type':'application/json'}),...(token?{authorization:'Bearer '+token}:{})},
       body:body===undefined?undefined:JSON.stringify(body),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(timeoutMs)]):AbortSignal.timeout(timeoutMs)});}
     catch(e){if(signal?.aborted)throw new CliError('CANCELED','操作已取消。');throw new CliError('NETWORK_ERROR','无法连接 MelonBuild，请检查网络后重试。');}
+    let bodyText;
+    try{bodyText=(await readBounded(response)).toString('utf8');}
+    catch(e){if(e instanceof CliError)throw e;if(signal?.aborted)throw new CliError('CANCELED','操作已取消。');throw new CliError('NETWORK_ERROR','读取服务响应时连接中断，请重试。',{status:response.status});}
     let data;
-    try{data=JSON.parse((await readBounded(response)).toString('utf8'));}catch(e){if(e instanceof CliError)throw e;throw new CliError('INVALID_RESPONSE','服务返回了无法解析的响应。');}
+    try{data=JSON.parse(bodyText);}catch{
+      if(!response.ok)throw new CliError(response.status>=500?'SERVICE_UNAVAILABLE':'HTTP_ERROR',
+        response.status>=500?`服务暂时不可用（HTTP ${response.status}），请稍后重试。`:`请求失败（HTTP ${response.status}）。`,{status:response.status});
+      throw new CliError('INVALID_RESPONSE','服务返回了无法解析的响应。',{status:response.status});
+    }
     if(!response.ok) {
       const retryAfter=Number(response.headers.get('retry-after'))||0;
       const code=data.error?.code||'REQUEST_FAILED',limit=limitDetails(data.error?.limit);
